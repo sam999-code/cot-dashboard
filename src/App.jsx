@@ -39,14 +39,14 @@ const INSTR = {
   DXY: { name: "US Dollar Index", cat: "Dollar",  venue: "ICE",   cohort: "Non-Commercial",  cfd: "DXY" },
 };
 const ORDER = ["GC","SI","HG","PL","PA","CL","NG","ES","NQ","YM","RTY","6E","6B","6J","6A","6C","6S","6N","BTC","ETH","DXY"];
-// TradingView chart symbols (CFD-style where possible — matches what Salim trades)
+// TradingView chart symbols — the actual FUTURES contracts (match the CFTC COT data)
 const TV = {
-  GC: "OANDA:XAUUSD", SI: "OANDA:XAGUSD", HG: "COMEX:HG1!", PL: "OANDA:XPTUSD", PA: "OANDA:XPDUSD",
-  CL: "TVC:USOIL", NG: "NYMEX:NG1!",
-  ES: "OANDA:SPX500USD", NQ: "OANDA:NAS100USD", YM: "OANDA:US30USD", RTY: "CME_MINI:RTY1!",
-  "6E": "OANDA:EURUSD", "6B": "OANDA:GBPUSD", "6J": "OANDA:USDJPY", "6A": "OANDA:AUDUSD",
-  "6C": "OANDA:USDCAD", "6S": "OANDA:USDCHF", "6N": "OANDA:NZDUSD",
-  BTC: "BINANCE:BTCUSDT", ETH: "BINANCE:ETHUSDT", DXY: "TVC:DXY",
+  GC: "COMEX:GC1!", SI: "COMEX:SI1!", HG: "COMEX:HG1!", PL: "NYMEX:PL1!", PA: "NYMEX:PA1!",
+  CL: "NYMEX:CL1!", NG: "NYMEX:NG1!",
+  ES: "CME_MINI:ES1!", NQ: "CME_MINI:NQ1!", YM: "CBOT_MINI:YM1!", RTY: "CME_MINI:RTY1!",
+  "6E": "CME:6E1!", "6B": "CME:6B1!", "6J": "CME:6J1!", "6A": "CME:6A1!",
+  "6C": "CME:6C1!", "6S": "CME:6S1!", "6N": "CME:6N1!",
+  BTC: "CME:BTC1!", ETH: "CME:ETH1!", DXY: "ICEUS:DX1!",
 };
 const CATS = ["All", "Metals", "Energy", "Indices", "FX", "Crypto", "Dollar"];
 const CAT_LABEL = {
@@ -845,7 +845,7 @@ function MarketModal({ sym, data, onClose, lang }) {
           <div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
               <span style={{ fontSize: 24, fontWeight: 800, color: C.text }}>{m.name}</span>
-              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: C.faint }}>{sym} · {m.venue} · chart {m.cfd}</span>
+              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: C.faint }}>{sym} · {m.venue} · chart {TV[sym]}</span>
               <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 700, color: accent, background: s.isLong ? C.longSoft : C.shortSoft, border: `1px solid ${accent}`, borderRadius: 6, padding: "2px 8px" }}>
                 {s.isLong ? "NET LONG" : "NET SHORT"}
               </span>
