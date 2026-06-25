@@ -14,9 +14,40 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhbmtzdHBvaWJ1cXB0cW9scHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODYzNTAsImV4cCI6MjA5Nzg2MjM1MH0.xiEfxggpzZHwIjlIsQiavUNmZWSwQpdI377wWMJA0Cs";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const META = {
-  GC: { name: "Gold", venue: "COMEX", cohort: "Managed Money", cfd: "XAUUSD" },
-  NQ: { name: "Nasdaq-100", venue: "CME", cohort: "Leveraged Funds", cfd: "NAS100" },
+// Full instrument catalog. cohort = the speculative "smart money" group in each report.
+const INSTR = {
+  GC:  { name: "Gold",            cat: "Metals",  venue: "COMEX", cohort: "Managed Money",   cfd: "XAUUSD" },
+  SI:  { name: "Silver",          cat: "Metals",  venue: "COMEX", cohort: "Managed Money",   cfd: "XAGUSD" },
+  HG:  { name: "Copper",          cat: "Metals",  venue: "COMEX", cohort: "Managed Money",   cfd: "COPPER" },
+  PL:  { name: "Platinum",        cat: "Metals",  venue: "NYMEX", cohort: "Managed Money",   cfd: "XPTUSD" },
+  PA:  { name: "Palladium",       cat: "Metals",  venue: "NYMEX", cohort: "Managed Money",   cfd: "XPDUSD" },
+  CL:  { name: "WTI Crude Oil",   cat: "Energy",  venue: "ICE",   cohort: "Managed Money",   cfd: "USOIL" },
+  NG:  { name: "Natural Gas",     cat: "Energy",  venue: "NYMEX", cohort: "Managed Money",   cfd: "NATGAS" },
+  ES:  { name: "S&P 500",         cat: "Indices", venue: "CME",   cohort: "Leveraged Funds", cfd: "US500" },
+  NQ:  { name: "Nasdaq-100",      cat: "Indices", venue: "CME",   cohort: "Leveraged Funds", cfd: "NAS100" },
+  YM:  { name: "Dow Jones",       cat: "Indices", venue: "CBOT",  cohort: "Leveraged Funds", cfd: "US30" },
+  RTY: { name: "Russell 2000",    cat: "Indices", venue: "CME",   cohort: "Leveraged Funds", cfd: "US2000" },
+  "6E": { name: "Euro",           cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "EURUSD" },
+  "6B": { name: "British Pound",  cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "GBPUSD" },
+  "6J": { name: "Japanese Yen",   cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "USDJPY (inv)" },
+  "6A": { name: "Aussie Dollar",  cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "AUDUSD" },
+  "6C": { name: "Canadian Dollar",cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "USDCAD (inv)" },
+  "6S": { name: "Swiss Franc",    cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "USDCHF (inv)" },
+  "6N": { name: "NZ Dollar",      cat: "FX",      venue: "CME",   cohort: "Leveraged Funds", cfd: "NZDUSD" },
+  BTC: { name: "Bitcoin",         cat: "Crypto",  venue: "CME",   cohort: "Leveraged Funds", cfd: "BTCUSD" },
+  ETH: { name: "Ether",           cat: "Crypto",  venue: "CME",   cohort: "Leveraged Funds", cfd: "ETHUSD" },
+  DXY: { name: "US Dollar Index", cat: "Dollar",  venue: "ICE",   cohort: "Non-Commercial",  cfd: "DXY" },
+};
+const ORDER = ["GC","SI","HG","PL","PA","CL","NG","ES","NQ","YM","RTY","6E","6B","6J","6A","6C","6S","6N","BTC","ETH","DXY"];
+const CATS = ["All", "Metals", "Energy", "Indices", "FX", "Crypto", "Dollar"];
+const CAT_LABEL = {
+  All:     { en: "All",      ar: "الكل" },
+  Metals:  { en: "Metals",   ar: "المعادن" },
+  Energy:  { en: "Energy",   ar: "الطاقة" },
+  Indices: { en: "Indices",  ar: "المؤشّرات" },
+  FX:      { en: "FX",       ar: "العملات" },
+  Crypto:  { en: "Crypto",   ar: "الرقمية" },
+  Dollar:  { en: "Dollar",   ar: "الدولار" },
 };
 
 const C = {
@@ -545,61 +576,103 @@ function HistoryChart({ s, mode }) {
   );
 }
 
-function Panel({ sym, mode, data, index }) {
+function MiniGauge({ s }) {
+  const zeroPct = Math.max(0, Math.min(100, s.zeroPos * 100));
+  const markerLeft = (s.pos * 100).toFixed(1);
+  const extreme = s.pos >= 0.85 || s.pos <= 0.15;
+  return (
+    <div style={{ marginTop: 11 }}>
+      <div style={{ position: "relative", height: 6, borderRadius: 4, background: `linear-gradient(90deg, ${C.shortSoft}, #1a2230 ${zeroPct}%, ${C.longSoft})`, border: `1px solid ${C.borderSoft}` }}>
+        <div style={{ position: "absolute", left: `calc(${markerLeft}% - 4px)`, top: -2, width: 8, height: 8, borderRadius: "50%", background: s.isLong ? C.long : C.short, boxShadow: `0 0 0 2px ${C.panel2}` }} />
+      </div>
+      <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: extreme ? C.amber : C.faint, marginTop: 5 }}>
+        {(s.pos * 100).toFixed(0)}% of 18-mo range{extreme ? " · extreme" : ""}
+      </div>
+    </div>
+  );
+}
+
+function MiniCard({ sym, data, selected, onSelect }) {
   const s = compute(sym, data);
-  const m = META[sym];
+  const m = INSTR[sym];
+  const accent = s.isLong ? C.long : C.short;
+  return (
+    <button onClick={() => onSelect(sym)} dir="ltr" style={{
+      textAlign: "left", cursor: "pointer", display: "block", width: "100%",
+      background: selected ? C.panel : C.panel2,
+      border: `1px solid ${selected ? accent : C.border}`, borderRadius: 12, padding: "13px 14px",
+      boxShadow: selected ? `0 0 20px ${s.isLong ? C.longSoft : C.shortSoft}` : "none",
+      transition: "border-color .25s ease, background .25s ease, box-shadow .25s ease, transform .15s ease",
+      transform: selected ? "translateY(-1px)" : "none",
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: C.faint }}>{sym} · {m.venue}</div>
+        </div>
+        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, fontWeight: 700, color: accent, background: s.isLong ? C.longSoft : C.shortSoft, border: `1px solid ${accent}`, borderRadius: 5, padding: "2px 6px", whiteSpace: "nowrap" }}>
+          {s.isLong ? "LONG" : "SHORT"}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 11 }}>
+        <div>
+          <div style={{ fontSize: 9.5, color: C.faint, textTransform: "uppercase" }}>Net</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 15, fontWeight: 700, color: accent }}>{fmtSigned(s.last.net)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9.5, color: C.faint, textTransform: "uppercase" }}>% Long</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 15, fontWeight: 700, color: C.text }}>{s.last.pctLong}%</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9.5, color: C.faint, textTransform: "uppercase" }}>1-wk</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 15, fontWeight: 700, color: s.change1w >= 0 ? C.long : C.short }}>{fmtSigned(s.change1w)}</div>
+        </div>
+      </div>
+      <MiniGauge s={s} />
+    </button>
+  );
+}
+
+function DetailPanel({ sym, mode, data }) {
+  const s = compute(sym, data);
+  const m = INSTR[sym];
   const accent = s.isLong ? C.long : C.short;
   const animNet = useCountUp(s.last.net);
   const animPct = useCountUp(s.last.pctLong);
   const animChg = useCountUp(s.change1w);
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0, active: false });
-  const onMove = (e) => {
-    if (prefersReduced()) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width;
-    const py = (e.clientY - r.top) / r.height;
-    setTilt({ ry: (px - 0.5) * 9, rx: (0.5 - py) * 9, active: true });
-  };
-  const onLeave = () => setTilt({ rx: 0, ry: 0, active: false });
-
   return (
-    <div data-anim style={{ flex: "1 1 340px", minWidth: 300, perspective: 1000, animation: "mdh-rise .6s cubic-bezier(.2,.8,.2,1) both", animationDelay: `${0.12 + index * 0.14}s` }}>
-      <div data-anim onMouseMove={onMove} onMouseLeave={onLeave} dir="ltr" style={{
-        background: C.panel, border: `1px solid ${tilt.active ? accent : C.border}`, borderRadius: 14, padding: 20,
-        transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) translateY(${tilt.active ? -4 : 0}px)`,
-        transition: tilt.active ? "border-color .2s ease, box-shadow .2s ease" : "transform .5s cubic-bezier(.2,.8,.2,1), border-color .3s ease, box-shadow .3s ease",
-        boxShadow: tilt.active ? `0 18px 42px rgba(0,0,0,.5), 0 0 26px ${s.isLong ? C.longSoft : C.shortSoft}` : "0 1px 0 rgba(0,0,0,.25)",
-        willChange: "transform",
-      }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 19, fontWeight: 700, color: C.text }}>{m.name}</span>
-              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: C.faint }}>{sym} · {m.venue}</span>
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{m.cohort} · trades as {m.cfd}</div>
+    <div key={sym} data-anim dir="ltr" style={{
+      background: C.panel, border: `1px solid ${accent}`, borderRadius: 14, padding: 20,
+      boxShadow: `0 0 26px ${s.isLong ? C.longSoft : C.shortSoft}`, animation: "mdh-fade .35s ease both",
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 21, fontWeight: 700, color: C.text }}>{m.name}</span>
+            <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: C.faint }}>{sym} · {m.venue}</span>
           </div>
-          <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 700, color: accent, background: s.isLong ? C.longSoft : C.shortSoft, border: `1px solid ${accent}`, borderRadius: 6, padding: "3px 9px", whiteSpace: "nowrap" }}>
-            {s.isLong ? "NET LONG" : "NET SHORT"}
-          </span>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{m.cohort} · vs {m.cfd}</div>
         </div>
-        <div style={{ display: "flex", gap: 22, marginTop: 18, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 11, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Net position</div>
-            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 26, fontWeight: 700, color: accent, lineHeight: 1.2 }}>{fmtSigned(Math.round(animNet))}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>% Long</div>
-            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 26, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>{animPct.toFixed(1)}%</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>1-wk change</div>
-            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 26, fontWeight: 700, color: s.change1w >= 0 ? C.long : C.short, lineHeight: 1.2 }}>{fmtSigned(Math.round(animChg))}</div>
-          </div>
-        </div>
-        <Gauge s={s} />
-        <div key={mode} data-anim style={{ animation: "mdh-fade .35s ease both" }}><HistoryChart s={s} mode={mode} /></div>
+        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 700, color: accent, background: s.isLong ? C.longSoft : C.shortSoft, border: `1px solid ${accent}`, borderRadius: 6, padding: "3px 9px", whiteSpace: "nowrap" }}>
+          {s.isLong ? "NET LONG" : "NET SHORT"}
+        </span>
       </div>
+      <div style={{ display: "flex", gap: 22, marginTop: 18, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 11, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Net position</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 26, fontWeight: 700, color: accent, lineHeight: 1.2 }}>{fmtSigned(Math.round(animNet))}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>% Long</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 26, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>{animPct.toFixed(1)}%</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>1-wk change</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 26, fontWeight: 700, color: s.change1w >= 0 ? C.long : C.short, lineHeight: 1.2 }}>{fmtSigned(Math.round(animChg))}</div>
+        </div>
+      </div>
+      <Gauge s={s} />
+      <div key={mode} data-anim style={{ animation: "mdh-fade .35s ease both" }}><HistoryChart s={s} mode={mode} /></div>
     </div>
   );
 }
@@ -620,6 +693,8 @@ function Center({ children, sub, loading }) {
 
 function Dashboard({ lang, setLang }) {
   const [mode, setMode] = useState("net");
+  const [cat, setCat] = useState("All");
+  const [sel, setSel] = useState("GC");
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const rtl = lang === "ar";
@@ -627,19 +702,38 @@ function Dashboard({ lang, setLang }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data: rows, error } = await supabase
-        .from("cot_positioning")
-        .select("date, sym, long, short, net, pct_long, oi")
-        .order("date", { ascending: true });
+      const PAGE = 1000;          // Supabase caps each request at 1000 rows
+      let from = 0, acc = [];
+      while (true) {
+        const { data: rows, error } = await supabase
+          .from("cot_positioning")
+          .select("date, sym, long, short, net, pct_long, oi")
+          .order("date", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) { if (alive) setErr(error.message); return; }
+        acc = acc.concat(rows);
+        if (rows.length < PAGE) break;   // last page reached
+        from += PAGE;
+      }
       if (!alive) return;
-      if (error) { setErr(error.message); return; }
-      setData(rows.map((r) => ({
+      setData(acc.map((r) => ({
         date: r.date, sym: r.sym, long: r.long, short: r.short,
         net: r.net, pctLong: Number(r.pct_long), oi: r.oi,
       })));
     })();
     return () => { alive = false; };
   }, []);
+
+  const present = useMemo(() => {
+    if (!data) return [];
+    const set = new Set(data.map((r) => r.sym));
+    return ORDER.filter((s) => set.has(s));
+  }, [data]);
+
+  const visible = useMemo(
+    () => present.filter((s) => cat === "All" || INSTR[s].cat === cat),
+    [present, cat]
+  );
 
   const latestDate = useMemo(
     () => (data && data.length ? data.reduce((a, r) => (r.date > a ? r.date : a), "0") : null),
@@ -650,6 +744,14 @@ function Dashboard({ lang, setLang }) {
   if (!data) return <Center loading>{T.loading[lang]}</Center>;
   if (!data.length) return <Center>No data found in the table yet.</Center>;
 
+  const pickCat = (c) => {
+    setCat(c);
+    if (c !== "All" && INSTR[sel].cat !== c) {
+      const first = present.find((s) => INSTR[s].cat === c);
+      if (first) setSel(first);
+    }
+  };
+
   const Tab = ({ id, label }) => (
     <button onClick={() => setMode(id)} style={{
       fontFamily: "ui-monospace, monospace", fontSize: 12, cursor: "pointer",
@@ -659,10 +761,19 @@ function Dashboard({ lang, setLang }) {
     }}>{label}</button>
   );
 
+  const Chip = ({ c }) => (
+    <button onClick={() => pickCat(c)} style={{
+      fontFamily: "ui-monospace, monospace", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+      padding: "6px 13px", borderRadius: 8, border: `1px solid ${cat === c ? C.amber : C.border}`,
+      background: cat === c ? C.goldSoft : "transparent", color: cat === c ? C.goldBright : C.muted,
+      transition: "all .2s ease",
+    }}>{CAT_LABEL[c][lang]}</button>
+  );
+
   return (
     <div style={{ background: C.bg, minHeight: "100vh", padding: "26px 20px", fontFamily: "system-ui, -apple-system, sans-serif", color: C.text }}>
       <Style />
-      <div style={{ maxWidth: 920, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
         <div data-anim style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 4, animation: "mdh-fade .5s ease both" }}>
           <div>
             <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, letterSpacing: 2, color: C.amber, textTransform: "uppercase" }}>Market Data Hub</div>
@@ -674,29 +785,40 @@ function Dashboard({ lang, setLang }) {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
             <LangToggle lang={lang} setLang={setLang} />
             <div style={{ textAlign: "right", fontFamily: "ui-monospace, monospace", fontSize: 12, color: C.faint }}>
-              <div>CFTC · weekly</div>
+              <div>CFTC · weekly · {present.length} markets</div>
               <div style={{ color: C.muted }}>latest {niceDate(latestDate)}</div>
             </div>
           </div>
         </div>
 
-        <div data-anim style={{ display: "flex", gap: 4, margin: "16px 0 14px", padding: 4, background: C.panel2, border: `1px solid ${C.borderSoft}`, borderRadius: 10, width: "fit-content", animation: "mdh-fade .5s ease both", animationDelay: ".05s" }}>
+        {/* category filters */}
+        <div data-anim style={{ display: "flex", gap: 7, flexWrap: "wrap", margin: "16px 0 0", animation: "mdh-fade .5s ease both", animationDelay: ".05s" }}>
+          {CATS.map((c) => <Chip key={c} c={c} />)}
+        </div>
+
+        {/* net / %long toggle */}
+        <div data-anim style={{ display: "flex", gap: 4, margin: "14px 0 16px", padding: 4, background: C.panel2, border: `1px solid ${C.borderSoft}`, borderRadius: 10, width: "fit-content", animation: "mdh-fade .5s ease both", animationDelay: ".1s" }}>
           <Tab id="net" label="Net position" /><Tab id="pct" label="% Long" />
         </div>
 
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <Panel sym="GC" mode={mode} data={data} index={0} />
-          <Panel sym="NQ" mode={mode} data={data} index={1} />
+        {/* selected-market detail */}
+        <DetailPanel sym={sel} mode={mode} data={data} />
+
+        {/* watchlist grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12, marginTop: 16 }}>
+          {visible.map((s) => (
+            <MiniCard key={s} sym={s} data={data} selected={s === sel} onSelect={setSel} />
+          ))}
         </div>
 
-        <div data-anim dir={rtl ? "rtl" : "ltr"} style={{ background: C.panel2, border: `1px solid ${C.borderSoft}`, borderRadius: 12, padding: "14px 18px", marginTop: 16, fontSize: rtl ? 15 : 13, color: C.muted, lineHeight: rtl ? 1.9 : 1.6, animation: "mdh-fade .6s ease both", animationDelay: ".45s", fontFamily: rtl ? "'Amiri', serif" : "inherit", textAlign: rtl ? "right" : "left" }}>
+        <div data-anim dir={rtl ? "rtl" : "ltr"} style={{ background: C.panel2, border: `1px solid ${C.borderSoft}`, borderRadius: 12, padding: "14px 18px", marginTop: 16, fontSize: rtl ? 15 : 13, color: C.muted, lineHeight: rtl ? 1.9 : 1.6, fontFamily: rtl ? "'Amiri', serif" : "inherit", textAlign: rtl ? "right" : "left" }}>
           <span style={{ color: C.text, fontWeight: 600 }}>{T.howToTitle[lang]}</span> {T.howToBody[lang]}
         </div>
 
-        <div data-anim style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginTop: 14, fontFamily: "ui-monospace, monospace", fontSize: 11, color: C.faint, animation: "mdh-fade .6s ease both", animationDelay: ".55s" }}>
+        <div data-anim style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginTop: 14, fontFamily: "ui-monospace, monospace", fontSize: 11, color: C.faint }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
             <span data-anim style={{ width: 7, height: 7, borderRadius: "50%", background: C.long, animation: "mdh-pulse 2.2s infinite" }} />
-            Live from Supabase · {data.length} weekly reports · free CFTC data
+            Live from Supabase · {present.length} markets · free CFTC data
           </span>
           <span style={{ color: C.muted, fontFamily: rtl ? "'Amiri', serif" : "ui-monospace, monospace" }}>{T.footerNote[lang]}</span>
         </div>
