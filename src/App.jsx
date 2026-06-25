@@ -39,6 +39,15 @@ const INSTR = {
   DXY: { name: "US Dollar Index", cat: "Dollar",  venue: "ICE",   cohort: "Non-Commercial",  cfd: "DXY" },
 };
 const ORDER = ["GC","SI","HG","PL","PA","CL","NG","ES","NQ","YM","RTY","6E","6B","6J","6A","6C","6S","6N","BTC","ETH","DXY"];
+// TradingView chart symbols (CFD-style where possible — matches what Salim trades)
+const TV = {
+  GC: "OANDA:XAUUSD", SI: "OANDA:XAGUSD", HG: "COMEX:HG1!", PL: "OANDA:XPTUSD", PA: "OANDA:XPDUSD",
+  CL: "TVC:USOIL", NG: "NYMEX:NG1!",
+  ES: "OANDA:SPX500USD", NQ: "OANDA:NAS100USD", YM: "OANDA:US30USD", RTY: "CME_MINI:RTY1!",
+  "6E": "OANDA:EURUSD", "6B": "OANDA:GBPUSD", "6J": "OANDA:USDJPY", "6A": "OANDA:AUDUSD",
+  "6C": "OANDA:USDCAD", "6S": "OANDA:USDCHF", "6N": "OANDA:NZDUSD",
+  BTC: "BINANCE:BTCUSDT", ETH: "BINANCE:ETHUSDT", DXY: "TVC:DXY",
+};
 const CATS = ["All", "Metals", "Energy", "Indices", "FX", "Crypto", "Dollar"];
 const CAT_LABEL = {
   All:     { en: "All",      ar: "الكل" },
@@ -73,6 +82,8 @@ const ANIM = `
 @keyframes mdh-bobS { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-4px);} }
 @keyframes mdh-glint { 0%,100% { opacity:.3;} 50% { opacity:1;} }
 @keyframes mdh-riseChart { 0%,100% { transform: translateY(2px); opacity:.55;} 50% { transform: translateY(-2px); opacity:1;} }
+@keyframes mdh-flipIn { from { transform: perspective(1800px) rotateY(82deg) scale(.94); opacity:0;} to { transform: perspective(1800px) rotateY(0deg) scale(1); opacity:1;} }
+@keyframes mdh-overlayIn { from { opacity:0;} to { opacity:1;} }
 @media (prefers-reduced-motion: reduce) {
   [data-anim] { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
@@ -677,9 +688,53 @@ function DetailPanel({ sym, mode, data }) {
   );
 }
 
+// Atmospheric dashboard background: blue/gold glow + dark base (keeps content readable)
+const DASH_BG =
+  "radial-gradient(ellipse 90% 55% at 50% -5%, rgba(36,70,120,0.5), transparent 60%)," +
+  "radial-gradient(ellipse 60% 50% at 92% 105%, rgba(205,164,52,0.10), transparent 55%)," +
+  "linear-gradient(180deg, #0a0f1a 0%, #0b0f17 55%, #090d14 100%)";
+
+function DashBgDecor() {
+  const candles = useMemo(() => {
+    const arr = []; let y = 150;
+    for (let i = 0; i < 48; i++) {
+      const open = y;
+      y = Math.max(70, Math.min(230, y + (Math.random() - 0.46) * 28));
+      const up = y <= open;
+      const hi = Math.min(open, y) - (5 + Math.random() * 16);
+      const lo = Math.max(open, y) + (5 + Math.random() * 16);
+      arr.push({ x: i * 25 + 14, open, close: y, hi, lo, up });
+    }
+    return arr;
+  }, []);
+  return (
+    <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
+      <div style={{
+        position: "absolute", inset: 0, opacity: 0.045,
+        backgroundImage: "linear-gradient(rgba(125,162,192,1) 1px, transparent 1px), linear-gradient(90deg, rgba(125,162,192,1) 1px, transparent 1px)",
+        backgroundSize: "46px 46px",
+      }} />
+      <svg viewBox="0 0 1200 300" preserveAspectRatio="xMidYMax slice"
+        style={{ position: "absolute", left: 0, right: 0, bottom: 0, width: "100%", height: "62%", opacity: 0.16 }}>
+        {candles.map((c, i) => {
+          const col = c.up ? C.long : C.short;
+          const top = Math.min(c.open, c.close);
+          const h = Math.max(2, Math.abs(c.close - c.open));
+          return (
+            <g key={i} stroke={col} fill={col}>
+              <line x1={c.x} x2={c.x} y1={c.hi} y2={c.lo} strokeWidth="1.5" />
+              <rect x={c.x - 6} y={top} width="12" height={h} />
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function Center({ children, sub, loading }) {
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, -apple-system, sans-serif", color: C.text, gap: 8 }}>
+    <div style={{ background: DASH_BG, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, -apple-system, sans-serif", color: C.text, gap: 8 }}>
       <Style />
       <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, letterSpacing: 2, color: C.amber, textTransform: "uppercase" }}>Market Data Hub</div>
       <div style={{ fontSize: 15, color: C.text, display: "flex", alignItems: "center", gap: 9 }}>
@@ -691,10 +746,155 @@ function Center({ children, sub, loading }) {
   );
 }
 
+function TVChart({ tvSymbol }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    host.innerHTML = "";
+    const widget = document.createElement("div");
+    widget.className = "tradingview-widget-container__widget";
+    widget.style.cssText = "height:100%;width:100%;";
+    host.appendChild(widget);
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true, symbol: tvSymbol, interval: "240", timezone: "Etc/UTC",
+      theme: "dark", style: "1", locale: "en", hide_side_toolbar: false,
+      allow_symbol_change: false, calendar: false, withdateranges: true,
+      support_host: "https://www.tradingview.com",
+    });
+    host.appendChild(script);
+    return () => { host.innerHTML = ""; };
+  }, [tvSymbol]);
+  return <div className="tradingview-widget-container" ref={ref} style={{ height: "100%", width: "100%" }} />;
+}
+
+function WhalePanel({ s, lang }) {
+  const rtl = lang === "ar";
+  const rows = s.rows;
+  const last = rows[rows.length - 1];
+  const back4 = rows[rows.length - 5] || rows[0];
+  const chg4 = last.net - back4.net;
+  const pct = (s.pos * 100).toFixed(0);
+  const stance = s.pos >= 0.85 ? { en: "Crowded LONG — stretched", ar: "ازدحام شرائي — متطرّف", c: C.amber }
+    : s.pos <= 0.15 ? { en: "Crowded SHORT — stretched", ar: "ازدحام بيعي — متطرّف", c: C.amber }
+    : { en: "Mid-range positioning", ar: "تموضع في منتصف النطاق", c: C.muted };
+  const Tile = ({ label, value, color }) => (
+    <div style={{ background: C.panel2, border: `1px solid ${C.borderSoft}`, borderRadius: 9, padding: "9px 12px", minWidth: 90 }}>
+      <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 17, fontWeight: 700, color: color || C.text }}>{value}</div>
+    </div>
+  );
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>{rtl ? "تموضع الحيتان" : "Whale Positioning"}</div>
+      <div dir={rtl ? "rtl" : "ltr"} style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontFamily: rtl ? "'Amiri', serif" : "inherit" }}>
+        {rtl ? "كبار المضاربين (" : "Big speculators ("}{s.last ? "" : ""}{INSTR_cohort(s)}{rtl ? ") — تقرير CFTC الأسبوعي" : ") — weekly CFTC report"}
+      </div>
+      <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+        <Tile label={rtl ? "الصافي" : "Net"} value={fmtSigned(last.net)} color={s.isLong ? C.long : C.short} />
+        <Tile label={rtl ? "% شراء" : "% Long"} value={last.pctLong + "%"} />
+        <Tile label={rtl ? "الموقع بالنطاق" : "Range pos"} value={pct + "%"} color={stance.c} />
+        <Tile label={rtl ? "تغيّر أسبوع" : "1-wk Δ"} value={fmtSigned(s.change1w)} color={s.change1w >= 0 ? C.long : C.short} />
+        <Tile label={rtl ? "تغيّر ٤ أسابيع" : "4-wk Δ"} value={fmtSigned(chg4)} color={chg4 >= 0 ? C.long : C.short} />
+        <Tile label="OI" value={fmt(last.oi)} />
+      </div>
+      <div dir={rtl ? "rtl" : "ltr"} style={{ marginTop: 12, fontSize: rtl ? 14 : 12.5, color: stance.c, fontFamily: rtl ? "'Amiri', serif" : "inherit", fontWeight: 600 }}>
+        {stance[lang]} · {pct}% {rtl ? "من نطاق ١٨ شهراً" : "of 18-mo range"}
+      </div>
+    </div>
+  );
+}
+function INSTR_cohort(s) { return s.cohort || ""; }
+
+function MarketModal({ sym, data, onClose, lang }) {
+  const [mode, setMode] = useState("net");
+  const s = compute(sym, data);
+  s.cohort = INSTR[sym].cohort;
+  const m = INSTR[sym];
+  const rtl = lang === "ar";
+  const accent = s.isLong ? C.long : C.short;
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [onClose]);
+  const Tab = ({ id, label }) => (
+    <button onClick={() => setMode(id)} style={{
+      fontFamily: "ui-monospace, monospace", fontSize: 12, cursor: "pointer", padding: "5px 12px", borderRadius: 7,
+      border: `1px solid ${mode === id ? C.border : "transparent"}`, background: mode === id ? C.panel : "transparent",
+      color: mode === id ? C.text : C.muted,
+    }}>{label}</button>
+  );
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 60, background: "rgba(4,7,12,0.78)", backdropFilter: "blur(3px)",
+      animation: "mdh-overlayIn .25s ease both", display: "flex", justifyContent: "center", alignItems: "flex-start",
+      padding: "24px 14px", overflowY: "auto",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} dir="ltr" style={{
+        width: "100%", maxWidth: 1000, background: DASH_BG, border: `1px solid ${C.border}`, borderRadius: 16,
+        padding: 20, transformOrigin: "center", animation: "mdh-flipIn .55s cubic-bezier(.2,.8,.2,1) both",
+        boxShadow: "0 30px 80px rgba(0,0,0,.6)",
+      }}>
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 24, fontWeight: 800, color: C.text }}>{m.name}</span>
+              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: C.faint }}>{sym} · {m.venue} · chart {m.cfd}</span>
+              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 700, color: accent, background: s.isLong ? C.longSoft : C.shortSoft, border: `1px solid ${accent}`, borderRadius: 6, padding: "2px 8px" }}>
+                {s.isLong ? "NET LONG" : "NET SHORT"}
+              </span>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ cursor: "pointer", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, width: 34, height: 34, fontSize: 18, lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+
+        {/* whale positioning */}
+        <div style={{ marginTop: 16 }}><WhalePanel s={s} lang={lang} /></div>
+
+        {/* live chart */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+            {rtl ? "الشارت الحيّ — استخدم أدوات الرسم على اليسار للدعم/المقاومة والستركشر" : "Live chart — use the drawing tools (left) for support/resistance & structure"}
+          </div>
+          <div style={{ height: "70vh", minHeight: 460, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+            <TVChart tvSymbol={TV[sym]} />
+          </div>
+        </div>
+
+        {/* COT history */}
+        <div style={{ marginTop: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{rtl ? "تاريخ تموضع الحيتان (COT)" : "Whale positioning history (COT)"}</div>
+            <div style={{ display: "flex", gap: 4, padding: 4, background: C.panel2, border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
+              <Tab id="net" label="Net" /><Tab id="pct" label="% Long" />
+            </div>
+          </div>
+          <Gauge s={s} />
+          <div key={mode} data-anim style={{ animation: "mdh-fade .35s ease both" }}><HistoryChart s={s} mode={mode} /></div>
+        </div>
+
+        {/* honest note */}
+        <div dir={rtl ? "rtl" : "ltr"} style={{ marginTop: 16, background: C.panel2, border: `1px dashed ${C.border}`, borderRadius: 10, padding: "12px 15px", fontSize: rtl ? 14 : 12.5, color: C.muted, lineHeight: rtl ? 1.9 : 1.6, fontFamily: rtl ? "'Amiri', serif" : "inherit", textAlign: rtl ? "right" : "left" }}>
+          {rtl
+            ? "ملاحظة: الرسم التلقائي للدعم/المقاومة والستركشر والأوردر بلوكس (من منطق ICT V4) هو المرحلة القادمة — يحتاج مصدر أسعار + إعادة بناء منطق المؤشّر بـ JavaScript. حالياً ارسم يدوياً على شارت TradingView أو أضف مؤشّرك داخل TradingView."
+            : "Note: auto-drawing S/R, market structure and order blocks (from ICT V4 logic) is the next phase — it needs a price feed + the indicator's logic re-built in JavaScript. For now, draw manually on the TradingView chart or add your indicator inside TradingView."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ lang, setLang }) {
   const [mode, setMode] = useState("net");
   const [cat, setCat] = useState("All");
   const [sel, setSel] = useState("GC");
+  const [open, setOpen] = useState(null);
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const rtl = lang === "ar";
@@ -771,9 +971,10 @@ function Dashboard({ lang, setLang }) {
   );
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "26px 20px", fontFamily: "system-ui, -apple-system, sans-serif", color: C.text }}>
+    <div style={{ position: "relative", background: DASH_BG, minHeight: "100vh", padding: "26px 20px", fontFamily: "system-ui, -apple-system, sans-serif", color: C.text }}>
       <Style />
-      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+      <DashBgDecor />
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1080, margin: "0 auto" }}>
         <div data-anim style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 4, animation: "mdh-fade .5s ease both" }}>
           <div>
             <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, letterSpacing: 2, color: C.amber, textTransform: "uppercase" }}>Market Data Hub</div>
@@ -807,7 +1008,7 @@ function Dashboard({ lang, setLang }) {
         {/* watchlist grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12, marginTop: 16 }}>
           {visible.map((s) => (
-            <MiniCard key={s} sym={s} data={data} selected={s === sel} onSelect={setSel} />
+            <MiniCard key={s} sym={s} data={data} selected={s === sel} onSelect={(x) => { setSel(x); setOpen(x); }} />
           ))}
         </div>
 
@@ -823,6 +1024,8 @@ function Dashboard({ lang, setLang }) {
           <span style={{ color: C.muted, fontFamily: rtl ? "'Amiri', serif" : "ui-monospace, monospace" }}>{T.footerNote[lang]}</span>
         </div>
       </div>
+
+      {open && <MarketModal sym={open} data={data} onClose={() => setOpen(null)} lang={lang} />}
     </div>
   );
 }
